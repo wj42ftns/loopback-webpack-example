@@ -1,128 +1,92 @@
-var webpack = require('webpack');
-var os = require('os');
+'use strict'
+
 var path = require('path');
-var fs = require('fs');
-var ExtractTextPlugin = require('extract-text-webpack-plugin');
-var HtmlWebpackPlugin = require('html-webpack-plugin');
-var AddAssetHtmlPlugin = require('add-asset-html-webpack-plugin');
-var HtmlWebpackHarddiskPlugin = require('html-webpack-harddisk-plugin');
-var UglifyJsPlugin = require('uglifyjs-webpack-plugin');
+var chalk = require('chalk');
+var webpack = require('webpack');
+var ProgressBarPlugin = require('progress-bar-webpack-plugin');
 
-var env = process.env.NODE_ENV || 'development';
-var hot = process.env.HOT === 'true';
-var OUTPUT_DIR = path.join(__dirname, './public');
-
-var defines = {
-  'process.env': {
-    NODE_ENV: JSON.stringify(env)
-  },
-  APP_CONFIG: fs.readFileSync(path.resolve(__dirname, 'configs', `${env}.json`)).toString()
+var paths = {
+  projectRoot: __dirname,
+  appRoot: path.join(__dirname, 'server'),
+  buildDir: 'build',
+  buildRoot: path.join(__dirname, 'build')
 };
+var prepareInstructions = require('./webpack/prepareInstructions')({
+  projectRoot: paths.projectRoot,
+  appRoot: paths.appRoot,
+  buildDir: paths.buildDir,
+});
+var prepareNodeModulesExternals = require('./webpack/prepareNodeModulesExternals');
+var prepareDependencyMap = require('./webpack/prepareDependencyMap')(paths.projectRoot);
+var prepareBootFiles = require('./webpack/prepareBootFiles');
+var externalsHandler = require('./webpack/externalsHandler');
+var createBootInstructionsJson = require('./webpack/createBootInstructionsJson');
 
-var plugins = [
-  new webpack.NoErrorsPlugin(),
-  new webpack.optimize.OccurenceOrderPlugin(),
-  new ExtractTextPlugin('[name].css'),
-  new webpack.DefinePlugin(defines),
-  new webpack.optimize.DedupePlugin(),
-  new AddAssetHtmlPlugin({
-    hash: true,
-    filepath: require.resolve(`${OUTPUT_DIR}/dist/vendor.js`),
-  }),
-  new webpack.ProvidePlugin({
-    $: 'jquery',
-    jQuery: 'jquery',
-    'window.jQuery': 'jquery'
-  })
-];
 
-plugins.push(new webpack.DllReferencePlugin({
-  context: '.',
-  manifest: require(`${OUTPUT_DIR}/dist/vendor-manifest.json`)
-}));
+const ins = prepareInstructions();
+// without it not worked!
+// eslint-disable-next-line no-unused-vars
+const bootFiles = prepareBootFiles(paths.projectRoot, ins);
+//
+const instructionsFile = createBootInstructionsJson(ins);
+const dependencyMap = prepareDependencyMap(ins);
+const nodeModulesExternals = prepareNodeModulesExternals();
 
-if (env === 'development') {
-  if (hot) {
-    plugins.push(new webpack.HotModuleReplacementPlugin());
-  }
-} else {
-  plugins.push(new UglifyJsPlugin({
-    parallel: os.cpus().length,
-    uglifyOptions: {
-      compress: {
-        warnings: true
-      },
-      output: {
-        beautify: false,
-        comments: false
-      }
-    },
-    sourceMap: false,
-  }));
-}
-
-plugins.push(new HtmlWebpackPlugin({
-  filename: path.join(OUTPUT_DIR, 'index.html'),
-  template: path.join(OUTPUT_DIR, 'index.template.html'),
-  minify: {
-    removeComments: true,
-    collapseWhitespace: true,
-    removeRedundantAttributes: true,
-    useShortDoctype: true,
-    removeEmptyAttributes: true,
-    removeStyleLinkTypeAttributes: true,
-    keepClosingSlash: true,
-    minify: true,
-    minifyJS: true,
-    minifyCSS: true,
-    minifyURLs: true,
-  },
-  hash: true,
-  cache: true,
-  chunks: ['app'],
-  alwaysWriteToDisk: true,
-  inject: true,
-  showErrors: false,
-}));
-
-plugins.push(new HtmlWebpackHarddiskPlugin());
 
 module.exports = {
-  externals: {
-    jquery: '$'
-  },
-  entry: {
-    app: ['./src/js/app.jsx']
-  },
+  context: paths.projectRoot,
+  entry: './server/server.js',
+  target: 'node',
+  devtool: 'source-map',
+  externals: [
+    externalsHandler(nodeModulesExternals)
+  ],
   output: {
-    path: `${OUTPUT_DIR}/dist`,
-    filename: '[name].js',
-    publicPath: hot && 'http://localhost:3001/' || '/dist',
+    libraryTarget: 'commonjs',
+    path: paths.buildRoot,
+    filename: '[name].bundle.js',
+    chunkFilename: '[id].bundle.js'
   },
+  node: {
+    __dirname: false,
+    __filename: false
+  },
+  resolve: {
+    extensions: ['', '.json', '.js'],
+    modulesDirectories: ['node_modules'],
+    alias: {
+      'boot-instructions.json': instructionsFile.path
+    }
+  },
+  plugins: [
+    new ProgressBarPlugin({
+      format: `  webpack Packing: [${chalk.yellow.bold(':bar')}] ` +
+        `${chalk.green.bold(':percent')} (${chalk.cyan.bold(':elapseds')})`,
+      width: 40,
+      summary: false,
+      clear: false
+    }),
+    new webpack.ContextReplacementPlugin(/\bloopback-boot[/\\]lib/, '', dependencyMap)
+  ],
   module: {
+    // suppress warnings for require(expr) since we are expecting these from
+    // loopback-boot.
+    exprContextCritical: false,
     loaders: [
+      /*{
+          test: /\.js$/i,
+          include: [
+              path.join(paths.projectRoot, 'server'),
+              path.join(paths.projectRoot, 'common'),
+              path.join(paths.projectRoot, 'node_modules', 'loopback-boot'),
+          ],
+          loader: 'babel'
+      },*/
       {
-        test: /\.css$/,
-        loader: ExtractTextPlugin.extract(
-          'css?-minimize,sourceMap'
-        )
-      },
-      {
-        test: /\.(js|jsx)$/,
-        include: path.join(__dirname, 'src'),
-        loaders: ['react-hot', 'babel?cacheDirectory=true']
-      },
-      {
-        include: /\.json$/,
-        loaders: ['json-loader']
+        test: [/\.json$/i],
+        loader: 'json-loader'
       },
     ]
   },
-  resolve: {
-    root: path.join(__dirname, 'src/js'),
-    extensions: ['', '.json', '.js', '.jsx', '.map'],
-    modulesDirectories: ['node_modules']
-  },
-  plugins,
-  devtool: env === 'development' ? 'source-map' : null
+  stats: { colors: true, modules: true, reasons: true, errorDetails: true }
 };
