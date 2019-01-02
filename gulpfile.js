@@ -17,11 +17,17 @@ var ProgressBarPlugin = require('progress-bar-webpack-plugin');
 var argv = require('yargs').argv;
 
 var paths = {
-    projectRoot: __dirname,
-    appRoot: path.join(__dirname, 'server'),
-    buildDir: 'build',
-    buildRoot: path.join(__dirname, 'build')
+  projectRoot: __dirname,
+  appRoot: path.join(__dirname, 'server'),
+  buildDir: 'build',
+  buildRoot: path.join(__dirname, 'build')
 };
+var relativeSourceFiles = require('./webpack/relativeSourceFiles')(paths.projectRoot);
+var prepareNodeModulesExternals = require('./webpack/prepareNodeModulesExternals');
+var prepareDependencyMap = require('./webpack/prepareDependencyMap')(paths.projectRoot);
+var prepareBootFiles = require('./webpack/prepareBootFiles');
+var externalsHandler = require('./webpack/externalsHandler');
+
 
 gulp.task('default', function(done) {
     Webpack().run(function(err, stats) {
@@ -61,93 +67,29 @@ function Webpack() {
     delete ins.config;
     delete ins.dataSources;
 
-    // rewrite all paths relative to the project root.
-    var relative = function(p) {
-        return './' + path.relative(paths.projectRoot, p).replace(/\\/g, '/');
-    };
-    var relativeSourceFiles = function(arr) {
-        arr && arr.forEach(function(item) {
-            if(item.sourceFile)
-                item.sourceFile = relative(item.sourceFile);
-        });
-    };
     relativeSourceFiles(ins.models);
     relativeSourceFiles(ins.components);
     var middleware = ins.middleware && ins.middleware.middleware;
     relativeSourceFiles(middleware);
-    var bootFiles = ins.files && ins.files.boot;
-    if(bootFiles)
-        bootFiles = ins.files.boot = bootFiles.map(relative);
+
+    // without it not worked!
+    // eslint-disable-next-line no-unused-vars
+    var bootFiles = prepareBootFiles(paths.projectRoot, ins);
 
     var instructionsFile = temp.openSync({prefix: 'boot-instructions-', suffix: '.json'});
     fs.writeSync(instructionsFile.fd, JSON.stringify(ins, null, argv.saveInstructions && '\t'));
     fs.closeSync(instructionsFile.fd);
     debug(`Saved boot instructions to ${chalk.cyan.bold(instructionsFile.path)}`);
 
-    // Construct the dependency map for loopback-boot. It resolves all of the
-    // dynamic module dependencies specified by the boot instructions:
-    //  * model definition js files
-    //  * component dependencies
-    //  * middleware dependencies
-    //  * boot scripts
-    //  Note: model JSON files are included in the instructions themselves so
-    //  are not bundled directly.
-    var dependencyMap = {};
-    var resolveSourceFiles = function(arr) {
-        arr && arr.forEach(function(item) {
-            if(item.sourceFile)
-                dependencyMap[item.sourceFile] = path.resolve(paths.projectRoot, item.sourceFile);
-        });
-    };
-    resolveSourceFiles(ins.models);
-    resolveSourceFiles(ins.components);
-    resolveSourceFiles(middleware);
-    bootFiles && bootFiles.forEach(function(boot) {
-        dependencyMap[boot] = path.resolve(paths.projectRoot, boot);
-    });
-
-    // create the set of node_modules which we will externalise below. we skip
-    // binary modules and loopback-boot which must be bundled by webpack in order
-    // to resolve dynamic dependencies.
-    var nodeModules = new Set;
-    try {
-        fs.readdirSync(path.join(paths.projectRoot, 'node_modules'))
-        .forEach(function(dir) {
-            if(dir !== '.bin' && dir !== 'loopback-boot')
-                nodeModules.add(dir);
-        });
-    } catch(e) {}
-
-    // we define a master externals handler that takes care of externalising
-    // node_modules (largely copied from webpack-node-externals) except for
-    // loopback-boot. We also externalise our config.json and datasources.json
-    // configuration files.
-    function externalsHandler(context, request, callback) {
-        // externalise dynamic config files.
-        // NOTE: if you intend to deploy these config files in the same
-        // directory as the bundle, change the result to `./${m[1]}.json`
-        var m = request.match(/(?:^|[\/\\])(config|datasources)\.json$/);
-        if(m) return callback(null, `../server/${m[1]}.json`);
-        // externalise if the path begins with a node_modules name or if it's
-        // an absolute path containing /node_modules/ (the latter results from
-        // loopback component and middleware dependencies).
-        const pathBase = request.split(/[\/\\]/)[0];
-        if(nodeModules.has(pathBase))
-            return callback(null, 'commonjs ' + request);
-        m = request.match(/[\/\\]node_modules[\/\\](.*)$/);
-        if(m)
-            return callback(null, 'commonjs ' + m[1].replace(/\\/g, '/'));
-        // otherwise internalise (bundle) the request.
-        callback();
-    };
-
+  const dependencyMap = prepareDependencyMap(ins);
+  const nodeModulesExternals = prepareNodeModulesExternals();
     return webpack({
         context: paths.projectRoot,
         entry: './server/server.js',
         target: 'node',
         devtool: 'source-map',
         externals: [
-            externalsHandler
+          externalsHandler(nodeModulesExternals)
         ],
         output: {
             libraryTarget: 'commonjs',
@@ -174,7 +116,7 @@ function Webpack() {
                 summary: false,
                 clear: false
             }),
-            new webpack.ContextReplacementPlugin(/\bloopback-boot[\/\\]lib/, '', dependencyMap)
+            new webpack.ContextReplacementPlugin(/\bloopback-boot[/\\]lib/, '', dependencyMap)
         ],
         module: {
             // suppress warnings for require(expr) since we are expecting these from

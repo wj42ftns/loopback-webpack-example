@@ -1,0 +1,10 @@
+{
+  "extends": "eslint:recommended",
+  "parser": "babel-eslint",
+  "globals": {
+    "__dirname": true,
+    "Set": true,
+    "module": true,
+    "require": true
+  }
+}
