@@ -1,20 +1,11 @@
 'use strict'
 
-// create an always-enabled debug namespace.
-var debugName = 'webpack';
-var debug = require('debug');
-debug.enable(debugName);
-debug = debug(debugName);
-
 var gulp = require('gulp');
 var gutil = require('gulp-util');
 var path = require('path');
-var fs = require('fs');
-var temp = require('temp');
 var chalk = require('chalk');
 var webpack = require('webpack');
 var ProgressBarPlugin = require('progress-bar-webpack-plugin');
-var argv = require('yargs').argv;
 
 var paths = {
   projectRoot: __dirname,
@@ -22,11 +13,16 @@ var paths = {
   buildDir: 'build',
   buildRoot: path.join(__dirname, 'build')
 };
-var relativeSourceFiles = require('./webpack/relativeSourceFiles')(paths.projectRoot);
+var prepareInstructions = require('./webpack/prepareInstructions')({
+  projectRoot: paths.projectRoot,
+  appRoot: paths.appRoot,
+  buildDir: paths.buildDir,
+});
 var prepareNodeModulesExternals = require('./webpack/prepareNodeModulesExternals');
 var prepareDependencyMap = require('./webpack/prepareDependencyMap')(paths.projectRoot);
 var prepareBootFiles = require('./webpack/prepareBootFiles');
 var externalsHandler = require('./webpack/externalsHandler');
+var createBootInstructionsJson = require('./webpack/createBootInstructionsJson');
 
 
 gulp.task('default', function(done) {
@@ -40,47 +36,12 @@ gulp.task('default', function(done) {
 });
 
 function Webpack() {
-    debug(`Building into ${chalk.cyan.bold('./' + paths.buildDir)}`);
+  const ins = prepareInstructions();
 
-    // if --save-instructions is omitted, we clean up the boot instructions
-    // temp file automatically.
-    if(!argv.saveInstructions)
-        temp = temp.track();
-
-    // use loopback-boot to compile the boot instructions and save them to a
-    // temporary file. we create a resolve alias below so that
-    // require('boot-instructions.json') will be resolved correctly.
-    debug('Compiling boot instructions');
-
-    var options = {
-        appRootDir:  paths.appRoot,
-        config:      require(path.join(paths.appRoot, 'config.json')),
-        dataSources: require(path.join(paths.appRoot, 'datasources.json')),
-        models:      require(path.join(paths.appRoot, 'model-config.json')),
-        middleware:  require(path.join(paths.appRoot, 'middleware.json')),
-    };
-    var compile = require('loopback-boot/lib/compiler');
-    var ins = compile(options);
-
-    // remove config and dataSources since they will be installed at
-    // runtime from external files.
-    delete ins.config;
-    delete ins.dataSources;
-
-    relativeSourceFiles(ins.models);
-    relativeSourceFiles(ins.components);
-    var middleware = ins.middleware && ins.middleware.middleware;
-    relativeSourceFiles(middleware);
-
-    // without it not worked!
-    // eslint-disable-next-line no-unused-vars
-    var bootFiles = prepareBootFiles(paths.projectRoot, ins);
-
-    var instructionsFile = temp.openSync({prefix: 'boot-instructions-', suffix: '.json'});
-    fs.writeSync(instructionsFile.fd, JSON.stringify(ins, null, argv.saveInstructions && '\t'));
-    fs.closeSync(instructionsFile.fd);
-    debug(`Saved boot instructions to ${chalk.cyan.bold(instructionsFile.path)}`);
-
+  // without it not worked!
+  // eslint-disable-next-line no-unused-vars
+  const bootFiles = prepareBootFiles(paths.projectRoot, ins);
+  const instructionsFile = createBootInstructionsJson(ins);
   const dependencyMap = prepareDependencyMap(ins);
   const nodeModulesExternals = prepareNodeModulesExternals();
     return webpack({
@@ -110,7 +71,7 @@ function Webpack() {
         },
         plugins: [
             new ProgressBarPlugin({
-                format: `  ${debugName} Packing: [${chalk.yellow.bold(':bar')}] ` +
+                format: `  webpack Packing: [${chalk.yellow.bold(':bar')}] ` +
                 `${chalk.green.bold(':percent')} (${chalk.cyan.bold(':elapseds')})`,
                 width: 40,
                 summary: false,
