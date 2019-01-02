@@ -3,6 +3,7 @@
   "parser": "babel-eslint",
   "globals": {
     "__dirname": true,
+    "process": true,
     "Set": true,
     "module": true,
     "require": true

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "main": "server/server.js",
   "scripts": {
-    "build": "./node_modules/webpack/bin/webpack.js"
+    "build": "webpack --progress --config webpack/webpack.config.js"
   },
   "dependencies": {
     "compression": "^1.0.3",
@@ -19,12 +19,13 @@
   "devDependencies": {
     "babel-eslint": "^10.0.1",
     "chalk": "^1.1.1",
+    "clean-webpack-plugin": "^1.0.0",
     "debug": "^2.2.0",
     "eslint": "^5.11.1",
-    "json-loader": "^0.5.4",
     "progress-bar-webpack-plugin": "^1.6.0",
     "temp": "^0.8.3",
-    "webpack": "^1.12.14",
+    "webpack": "^4.28.3",
+    "webpack-cli": "^3.1.2",
     "yargs": "^4.3.2"
   },
   "license": "MIT"
