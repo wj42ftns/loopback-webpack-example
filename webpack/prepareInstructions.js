@@ -24,11 +24,13 @@ module.exports = ({ projectRoot, appRoot, buildDir }) => () => {
   // require('boot-instructions.json') will be resolved correctly.
   debug('Compiling boot instructions');
 
+  const modelConfig = require(path.join(appRoot, 'model-config.json'));
   var options = {
     appRootDir: appRoot,
     config: require(path.join(appRoot, 'config.json')),
     dataSources: require(path.join(appRoot, 'datasources.json')),
-    models: require(path.join(appRoot, 'model-config.json')),
+    models: modelConfig,
+    mixinSources: modelConfig._meta.mixins,
     middleware: require(path.join(appRoot, 'middleware.json')),
   };
   var compile = require('loopback-boot/lib/compiler');
@@ -40,6 +42,7 @@ module.exports = ({ projectRoot, appRoot, buildDir }) => () => {
   delete instructions.dataSources;
 
   relativeSrcFiles(instructions.models);
+  relativeSrcFiles(instructions.mixins);
   relativeSrcFiles(instructions.components);
   var middleware = instructions.middleware && instructions.middleware.middleware;
   relativeSrcFiles(middleware);

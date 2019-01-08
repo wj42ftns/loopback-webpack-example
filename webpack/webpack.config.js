@@ -18,12 +18,11 @@ const prepareBootFiles = require('./prepareBootFiles');
 const externalsHandler = require('./externalsHandler');
 const createBootInstructionsJson = require('./createBootInstructionsJson');
 
-// const { dependencies } = require('./package.json');
-
 const NODE_ENV = process.env.NODE_ENV || 'development';
+const IS_DEV = NODE_ENV === 'development';
 
 const ins = prepareInstructions();
-// without it not worked!
+// without it don't worked!
 // eslint-disable-next-line no-unused-vars
 const bootFiles = prepareBootFiles(paths.projectRoot, ins);
 //
@@ -31,14 +30,12 @@ const instructionsFile = createBootInstructionsJson(ins);
 const dependencyMap = prepareDependencyMap(ins);
 const nodeModulesExternals = prepareNodeModulesExternals();
 
-
 module.exports = {
   context: paths.projectRoot,
-  devtool: 'source-map',
-  mode: NODE_ENV === 'development' ? 'development' : 'production',
+  devtool: IS_DEV ? 'source-map' : 'none',
+  mode: IS_DEV ? 'development' : 'production',
   target: 'node', // in order to ignore built-in modules like path, fs, etc.
   entry: {
-    // vendor: Object.keys(dependencies),
     main: paths.entry
   },
   externals: [
@@ -65,7 +62,9 @@ module.exports = {
     __filename: false
   },
   plugins: [
-    new webpack.EnvironmentPlugin('NODE_ENV'),
+    new webpack.EnvironmentPlugin({
+      NODE_ENV: 'development' // default
+    }),
     // new ProgressBarPlugin({
     //   format: `  webpack Packing: [${chalk.yellow.bold(':bar')}] ` +
     //     `${chalk.green.bold(':percent')} (${chalk.cyan.bold(':elapseds')})`,
@@ -92,9 +91,9 @@ module.exports = {
     ]
   },
   stats: {
-    colors: true,
-    modules: true,
-    reasons: true,
-    errorDetails: true
+    colors: IS_DEV,
+    modules: IS_DEV,
+    reasons: IS_DEV,
+    errorDetails: IS_DEV
   }
 };

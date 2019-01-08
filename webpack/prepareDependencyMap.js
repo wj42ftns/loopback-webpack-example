@@ -15,6 +15,7 @@ module.exports = (projectRoot) => (ins) => {
   let dependencyMap = {};
   const resolve = resolveSourceFiles(dependencyMap, projectRoot);
   dependencyMap = resolve(ins.models);
+  dependencyMap = resolve(ins.mixins);
   dependencyMap = resolve(ins.components);
   dependencyMap = resolve(middleware);
   const bootFiles = prepareBootFiles(projectRoot, ins);
