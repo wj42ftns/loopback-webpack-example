@@ -9,12 +9,8 @@ module.exports = nodeModules => async (context, request, callback) => {
     [/^configs$/, './configs'],
   ];
 
-  const result = runInstructions(request, instructions);
-  if (result) {
-    return callback(null, result);
-  }
 
-  callback();
+  return callback(null, runInstructions(request, instructions));
 };
 
 
