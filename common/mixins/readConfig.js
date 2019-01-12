@@ -1,9 +1,7 @@
+const config = require('configs');
+
 module.exports = function (Model) {
   Model.readConfig = (req, cb) => {
-    // @TODO
-    const config = {
-      test: 42
-    }
     cb(null, config);
   };
 

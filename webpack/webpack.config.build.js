@@ -2,19 +2,11 @@ const path = require('path');
 const webpack = require('webpack');
 const merge = require('webpack-merge');
 const CleanWebpackPlugin = require('clean-webpack-plugin');
-const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
 const webpackConfig = require('./webpack.config');
-
-const NODE_ENV = process.env.NODE_ENV || 'development';
-const IS_NOT_DEV = NODE_ENV !== 'development';
 
 module.exports = merge(webpackConfig, {
   mode: 'production',
   plugins: [
-    IS_NOT_DEV && new UglifyJsPlugin({ // it's better than native minimize - because get LICENSE to another file.
-      sourceMap: true,
-      extractComments: true
-    }),
     new webpack.optimize.AggressiveMergingPlugin(),
     new CleanWebpackPlugin(
       ['build'],
@@ -24,7 +16,7 @@ module.exports = merge(webpackConfig, {
     ),
   ].filter(Boolean),
   optimization: {
-    minimize: false,
+    minimize: true,
     runtimeChunk: false,
     splitChunks: {
       chunks: 'async',
@@ -42,18 +34,20 @@ module.exports = merge(webpackConfig, {
       }
     }
   },
-  module: {
-    rules: [
-      {
-        test: /\.js$/, //Regular expression
-        exclude: /(node_modules|bower_components)/,//excluded node_modules
-        use: {
-          loader: "babel-loader",
-          options: {
-            presets: ["@babel/preset-env"]  //Preset used for env setup
-          }
-        }
-      }
-    ]
-  },
+  // module: {
+  //   rules: [
+  //     {
+  //       test: /\.js$/,
+  //       exclude: [
+  //         /(node_modules|bower_components)/
+  //       ],
+  //       use: {
+  //         loader: "babel-loader",
+  //         options: {
+  //           presets: ["@babel/preset-env"]
+  //         }
+  //       }
+  //     }
+  //   ]
+  // },
 });

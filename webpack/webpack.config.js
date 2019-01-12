@@ -1,16 +1,11 @@
 'use strict'
 
-const path = require('path');
+const paths = require('./paths');
 // const chalk = require('chalk');
 const webpack = require('webpack');
+const CopyWebpackPlugin = require('copy-webpack-plugin')
 // const ProgressBarPlugin = require('progress-bar-webpack-plugin');
 
-const paths = {
-  projectRoot: path.resolve(__dirname, '../'),
-  appRoot: path.resolve(__dirname, '../server'),
-  buildDir: path.resolve(__dirname, '../build'),
-  entry: path.resolve(__dirname, '../server/server.js')
-};
 const prepareInstructions = require('./prepareInstructions')(paths);
 const prepareNodeModulesExternals = require('./prepareNodeModulesExternals');
 const prepareDependencyMap = require('./prepareDependencyMap')(paths.projectRoot);
@@ -62,9 +57,12 @@ module.exports = {
     __filename: false
   },
   plugins: [
-    new webpack.EnvironmentPlugin({
-      NODE_ENV: 'development' // default
-    }),
+    new CopyWebpackPlugin([
+      { from: 'configs', to: `${paths.buildDir}/configs` },
+    ]),
+    // new webpack.EnvironmentPlugin({
+    //   NODE_ENV: 'development' // default
+    // }),
     // new ProgressBarPlugin({
     //   format: `  webpack Packing: [${chalk.yellow.bold(':bar')}] ` +
     //     `${chalk.green.bold(':percent')} (${chalk.cyan.bold(':elapseds')})`,
